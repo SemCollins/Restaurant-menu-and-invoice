@@ -6,7 +6,7 @@ from tkinter import messagebox
 class HomeView(ctk.CTk):
     def __init__(self, on_order, on_admin_login):
         super().__init__()
-        self.title("Welcome to Coded Restaurant")
+        self.title("Welcome to Coded Restaurant_")
         self.geometry("400x300")
         self.resizable(False, False)
         ctk.set_appearance_mode("dark")
