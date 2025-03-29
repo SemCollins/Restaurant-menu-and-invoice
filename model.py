@@ -15,7 +15,6 @@ class MenuModel:
                 "Asanka Local Salad": 28,
             },
             "Main Courses": {
-                "Red Red (with Gari & Fish)": 40,
                 "Banku & Tilapia": 50,
                 "Tilapia": 30,
                 "Banku":20,
@@ -54,9 +53,8 @@ class MenuModel:
             "Other": {
                 "Tissues (per pack)": 8,
                 "Takeaway Containers": 8,
-            }
+            },
         }
-    
     def get_menu(self):
         return self.menu
 

@@ -1,8 +1,9 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
+from PIL import Image, ImageTk  # Using Pillow for background image handling
 
-# Home view remains largely unchanged.
+# ---------------- HomeView ----------------
 class HomeView(ctk.CTk):
     def __init__(self, on_order, on_admin_login):
         super().__init__()
@@ -11,10 +12,13 @@ class HomeView(ctk.CTk):
         self.resizable(False, False)
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
-
+        
+        # Load background image using Pillow.
         try:
-            self.bg = tk.PhotoImage(file='Images/bg.png')
-            bg_label = ctk.CTkLabel(self, image=self.bg, text="")
+            bg_image = Image.open('Images/bg.png')
+            bg_photo = ImageTk.PhotoImage(bg_image)
+            bg_label = ctk.CTkLabel(self, image=bg_photo, text="")
+            bg_label.image = bg_photo  # Keep a reference.
             bg_label.place(x=0, y=0, relwidth=1, relheight=1)
         except Exception as e:
             print("Background image not found or failed to load:", e)
@@ -22,13 +26,16 @@ class HomeView(ctk.CTk):
         welcome_label = ctk.CTkLabel(self, text="Welcome to Coded Restaurant", font=("Helvetica Bold-Oblique", 22))
         welcome_label.pack(pady=20)
         
-        order_button = ctk.CTkButton(self, text="Place Order", font=("Helvetica", 16), command=on_order)
+        # Updated button colors to complement the background.
+        order_button = ctk.CTkButton(self, text="Place Order", font=("Helvetica", 16),
+                                     command=on_order, fg_color="#1E90FF")
         order_button.pack(pady=10)
         
-        admin_button = ctk.CTkButton(self, text="Admin Login", font=("Helvetica", 16), command=on_admin_login)
+        admin_button = ctk.CTkButton(self, text="Admin Login", font=("Helvetica", 16),
+                                     command=on_admin_login, fg_color="#1E90FF")
         admin_button.pack(pady=10)
 
-# OrderView with order summary, plus buttons, and back button.
+# ---------------- OrderView ----------------
 class OrderView(ctk.CTkToplevel):
     def __init__(self, menu, on_generate_invoice, on_back):
         super().__init__()
@@ -38,53 +45,83 @@ class OrderView(ctk.CTkToplevel):
         self.on_generate_invoice = on_generate_invoice
         self.on_back = on_back
         self.order_summary = {}  # Mapping (category, item) -> quantity
-
-        # Layout: row0 for order summary, row1 for menu tabs, row2 for buttons.
+        
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
-
-        # Order summary textbox.
-        self.summary_textbox = ctk.CTkTextbox(self, wrap="word", font=("Helvetica", 14), height=100)
-        self.summary_textbox.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        
+        # Enlarged order summary frame at the top.
+        summary_frame = ctk.CTkFrame(self)
+        summary_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        
+        self.summary_textbox = ctk.CTkTextbox(summary_frame, wrap="word", font=("Helvetica", 14), height=150)
+        self.summary_textbox.grid(row=0, column=0, sticky="ew")
+        
+        summary_scrollbar = ctk.CTkScrollbar(summary_frame, orientation="vertical", command=self.summary_textbox.yview)
+        summary_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.summary_textbox.configure(yscrollcommand=summary_scrollbar.set)
         self.summary_textbox.configure(state="disabled")
-
+        
         # Tabview for menu items.
         self.tabview = ctk.CTkTabview(self)
         self.tabview.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         
         label_font = ("Helvetica", 14)
+        # For each category, add a scrollable frame.
         for category, items in self.menu.items():
             self.tabview.add(category)
-            frame = self.tabview.tab(category)
+            tab_frame = self.tabview.tab(category)
+            scroll_frame = ctk.CTkScrollableFrame(tab_frame, width=750, height=400)
+            scroll_frame.pack(fill="both", expand=True)
             row = 0
             for item, price in items.items():
-                label_item = ctk.CTkLabel(frame, text=item, font=label_font)
+                label_item = ctk.CTkLabel(scroll_frame, text=item, font=label_font)
                 label_item.grid(row=row, column=0, sticky="w", padx=5, pady=5)
                 
-                label_price = ctk.CTkLabel(frame, text=f"GHS {price:.2f}", font=label_font)
+                label_price = ctk.CTkLabel(scroll_frame, text=f"GHS {price:.2f}", font=label_font)
                 label_price.grid(row=row, column=1, padx=5, pady=5)
                 
-                plus_button = ctk.CTkButton(frame, text="+", width=30, font=label_font,
+                plus_button = ctk.CTkButton(scroll_frame, text="+", width=30, font=label_font,
                                              command=lambda c=category, i=item: self.add_item(c, i))
                 plus_button.grid(row=row, column=2, padx=5, pady=5)
+                
+                minus_button = ctk.CTkButton(scroll_frame, text="–", width=30, font=label_font,
+                                              command=lambda c=category, i=item: self.remove_item(c, i))
+                minus_button.grid(row=row, column=3, padx=5, pady=5)
                 row += 1
 
-        # Bottom button frame with Generate Invoice and Back buttons.
+        # Bottom button frame with Generate Invoice, Clear Orders, and Back buttons.
         self.button_frame = ctk.CTkFrame(self)
         self.button_frame.grid(row=2, column=0, pady=10, padx=10, sticky="ew")
-        self.button_frame.grid_columnconfigure((0,1), weight=1)
+        self.button_frame.grid_columnconfigure((0, 1, 2), weight=1)
         
         invoice_button = ctk.CTkButton(self.button_frame, text="Generate Invoice", font=("Helvetica", 16),
                                        command=self.generate_invoice)
         invoice_button.grid(row=0, column=0, padx=5, pady=5)
         
+        clear_button = ctk.CTkButton(self.button_frame, text="Clear Orders", font=("Helvetica", 16),
+                                     command=self.clear_orders)
+        clear_button.grid(row=0, column=1, padx=5, pady=5)
+        
         back_button = ctk.CTkButton(self.button_frame, text="Back", font=("Helvetica", 16),
                                     command=self.back)
-        back_button.grid(row=0, column=1, padx=5, pady=5)
+        back_button.grid(row=0, column=2, padx=5, pady=5)
     
     def add_item(self, category, item):
         key = (category, item)
         self.order_summary[key] = self.order_summary.get(key, 0) + 1
+        self.update_summary_display()
+    
+    def remove_item(self, category, item):
+        key = (category, item)
+        if key in self.order_summary:
+            if self.order_summary[key] > 1:
+                self.order_summary[key] -= 1
+            else:
+                del self.order_summary[key]
+            self.update_summary_display()
+    
+    def clear_orders(self):
+        self.order_summary.clear()
         self.update_summary_display()
     
     def update_summary_display(self):
@@ -109,7 +146,7 @@ class OrderView(ctk.CTkToplevel):
         self.destroy()
         self.on_back()
 
-# InvoiceView with a back button.
+# ---------------- InvoiceView ----------------
 class InvoiceView(ctk.CTkToplevel):
     def __init__(self, order_items, order_time, total, on_back):
         super().__init__()
@@ -147,7 +184,7 @@ class InvoiceView(ctk.CTkToplevel):
         self.destroy()
         self.on_back()
 
-# LoginView with a back button.
+# ---------------- LoginView ----------------
 class LoginView(ctk.CTkToplevel):
     def __init__(self, on_login, on_back):
         super().__init__()
@@ -189,7 +226,7 @@ class LoginView(ctk.CTkToplevel):
         self.destroy()
         self.on_back()
 
-# AdminPanelView with a back button.
+# ---------------- AdminPanelView ----------------
 class AdminPanelView(ctk.CTkToplevel):
     def __init__(self, menu, on_update_price, on_back):
         super().__init__()
@@ -206,7 +243,6 @@ class AdminPanelView(ctk.CTkToplevel):
         self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
         
         label_font = ("Helvetica", 14)
-        
         for category, items in self.menu.items():
             self.tabview.add(category)
             frame = self.tabview.tab(category)
@@ -231,7 +267,15 @@ class AdminPanelView(ctk.CTkToplevel):
                 update_button = ctk.CTkButton(frame, text="Update", font=label_font, 
                                               command=lambda c=category, i=item, e=entry: self.update_price(c, i, e))
                 update_button.grid(row=row, column=5, padx=5, pady=5)
+                
+                edit_button = ctk.CTkButton(frame, text="Edit", font=label_font, 
+                                            command=lambda c=category, i=item, p=price: self.open_edit_window(c, i, p))
+                edit_button.grid(row=row, column=6, padx=5, pady=5)
                 row += 1
+        
+        main_edit_button = ctk.CTkButton(self, text="Main Edit", font=("Helvetica", 16),
+                                         command=self.open_major_edit_window)
+        main_edit_button.pack(pady=10)
         
         back_button = ctk.CTkButton(self, text="Back", font=("Helvetica", 16), command=self.back)
         back_button.pack(pady=10)
@@ -253,6 +297,89 @@ class AdminPanelView(ctk.CTkToplevel):
         else:
             messagebox.showerror("Error", f"Failed to update price for '{item}'.")
     
+    def open_edit_window(self, category, item, current_price):
+        ProductEditView(self, category, item, current_price)
+    
+    def open_major_edit_window(self):
+        MajorEditView(self)
+    
     def back(self):
         self.destroy()
         self.on_back()
+
+# ---------------- ProductEditView ----------------
+class ProductEditView(ctk.CTkToplevel):
+    def __init__(self, parent, category, item, current_price):
+        super().__init__(parent)
+        self.title(f"Edit Product: {item}")
+        self.geometry("400x300")
+        self.category = category
+        self.item = item
+        self.current_price = current_price
+        self.create_widgets()
+    
+    def create_widgets(self):
+        label_font = ("Helvetica", 14)
+        
+        name_label = ctk.CTkLabel(self, text="Product Name:", font=label_font)
+        name_label.pack(pady=5)
+        self.name_entry = ctk.CTkEntry(self, font=label_font)
+        self.name_entry.insert(0, self.item)
+        self.name_entry.pack(pady=5)
+        
+        price_label = ctk.CTkLabel(self, text="Price:", font=label_font)
+        price_label.pack(pady=5)
+        self.price_entry = ctk.CTkEntry(self, font=label_font)
+        self.price_entry.insert(0, f"{self.current_price:.2f}")
+        self.price_entry.pack(pady=5)
+        
+        # Additional fields (e.g., quantity, description) can be added here.
+        
+        save_button = ctk.CTkButton(self, text="Save Changes", font=label_font, command=self.save_changes)
+        save_button.pack(pady=10)
+    
+    def save_changes(self):
+        new_name = self.name_entry.get()
+        new_price = self.price_entry.get()
+        # Implement saving logic as needed.
+        messagebox.showinfo("Saved", f"Changes saved for product '{new_name}'.")
+        self.destroy()
+
+# ---------------- MajorEditView ----------------
+class MajorEditView(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Major Edit Options")
+        self.geometry("400x400")
+        self.grab_set()     # Make this window modal.
+        self.focus_set()
+        self.create_widgets()
+    
+    def create_widgets(self):
+        label_font = ("Helvetica", 14)
+        label = ctk.CTkLabel(self, text="Major Edit Options", font=label_font)
+        label.pack(pady=10)
+        
+        add_category_button = ctk.CTkButton(self, text="Add Category", font=label_font, command=self.add_category)
+        add_category_button.pack(pady=5)
+        
+        add_item_button = ctk.CTkButton(self, text="Add Item", font=label_font, command=self.add_item)
+        add_item_button.pack(pady=5)
+        
+        remove_item_button = ctk.CTkButton(self, text="Remove Item", font=label_font, command=self.remove_item)
+        remove_item_button.pack(pady=5)
+        
+        edit_invoice_button = ctk.CTkButton(self, text="Edit Invoice Format", font=label_font, command=self.edit_invoice)
+        edit_invoice_button.pack(pady=5)
+    
+    def add_category(self):
+        messagebox.showinfo("Add Category", "Add Category functionality not implemented yet.")
+    
+    def add_item(self):
+        messagebox.showinfo("Add Item", "Add Item functionality not implemented yet.")
+    
+    def remove_item(self):
+        messagebox.showinfo("Remove Item", "Remove Item functionality not implemented yet.")
+    
+    def edit_invoice(self):
+        messagebox.showinfo("Edit Invoice", "Edit Invoice Format functionality not implemented yet.")
