@@ -13,18 +13,23 @@ class Controller:
         self.login_view = None
         self.admin_panel_view = None
 
+        # Default invoice template.
+        self.invoice_template = (
+            "Invoice\nOrder Time: {order_time}\n" +
+            "-" * 40 + "\n{items}" + "\n" +
+            "-" * 40 + "\nTotal: GHS {total:.2f}\n"
+        )
+        
         # Create the main (home) view. We pass callback functions for actions.
         self.main_view = HomeView(self.open_order_view, self.open_login_view)
     
     def open_order_view(self):
         # Hide the home window.
         self.main_view.withdraw()
-        # If an OrderView is already open, bring it to the front.
         if self.order_view is not None and self.order_view.winfo_exists():
             self.order_view.lift()
             return
 
-        # Pass on_generate_invoice and an on_back callback to return to home.
         self.order_view = OrderView(self.menu_model.get_menu(), self.generate_invoice, self.on_order_view_close)
         self.order_view.protocol("WM_DELETE_WINDOW", self.on_order_view_close)
     
@@ -32,26 +37,30 @@ class Controller:
         if self.order_view is not None:
             self.order_view.destroy()
             self.order_view = None
-        # Restore the home window.
         self.main_view.deiconify()
     
     def generate_invoice(self, order_details, order_view):
-        # Process the order using OrderModel.
         order_model = OrderModel()
         for category, item, quantity, price in order_details:
             order_model.add_item(category, item, quantity, price)
         total = order_model.calculate_total()
         order_time = order_model.get_order_time().strftime("%Y-%m-%d %H:%M:%S")
-        # Display the invoice in a new window with a back button that re‑shows the OrderView.
-        InvoiceView(order_details, order_time, total, on_back=lambda: order_view.deiconify())
+        
+        # Build the items string.
+        items_str = ""
+        for category, item, quantity, price in order_details:
+            item_total = quantity * price
+            items_str += f"{item} x {quantity} @ GHS {price:.2f} = GHS {item_total:.2f}\n"
+        
+        invoice_str = self.invoice_template.format(order_time=order_time, items=items_str, total=total)
+        # Pass the formatted invoice string to InvoiceView.
+        InvoiceView(invoice_str, on_back=lambda: order_view.deiconify())
     
     def open_login_view(self):
-        # Hide the home window.
         self.main_view.withdraw()
         if self.login_view is not None and self.login_view.winfo_exists():
             self.login_view.lift()
             return
-        # Pass an on_back callback so that LoginView can return to the home view.
         self.login_view = LoginView(self.process_login, self.on_login_view_close)
         self.login_view.protocol("WM_DELETE_WINDOW", self.on_login_view_close)
     
@@ -73,13 +82,12 @@ class Controller:
             messagebox.showerror("Login Failed", "Invalid credentials or insufficient privileges.")
     
     def open_admin_panel_view(self):
-        # Hide the home window.
         self.main_view.withdraw()
         if self.admin_panel_view is not None and self.admin_panel_view.winfo_exists():
             self.admin_panel_view.lift()
             return
-        # Pass an on_back callback so that AdminPanelView can return to the home view.
-        self.admin_panel_view = AdminPanelView(self.menu_model.get_menu(), self.update_menu_price, self.on_admin_panel_view_close)
+        # Pass both the MenuModel and the controller (self) so the admin panel can update data.
+        self.admin_panel_view = AdminPanelView(self.menu_model, self, self.on_admin_panel_view_close)
         self.admin_panel_view.protocol("WM_DELETE_WINDOW", self.on_admin_panel_view_close)
     
     def on_admin_panel_view_close(self):

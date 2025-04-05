@@ -17,7 +17,7 @@ class MenuModel:
             "Main Courses": {
                 "Banku & Tilapia": 50,
                 "Tilapia": 30,
-                "Banku":20,
+                "Banku": 20,
                 "Fufu & Groundnut Soup": 65,
                 "Fufu & Light Soup": 60,
                 "Jollof Rice with Fish": 58,
@@ -55,6 +55,7 @@ class MenuModel:
                 "Takeaway Containers": 8,
             },
         }
+    
     def get_menu(self):
         return self.menu
 
@@ -66,6 +67,31 @@ class MenuModel:
                 return True
             except ValueError:
                 return False
+        return False
+
+    # New methods for admin operations:
+    def add_category(self, category):
+        if category in self.menu:
+            return False
+        self.menu[category] = {}
+        return True
+
+    def add_item(self, category, item, price):
+        if category not in self.menu:
+            return False
+        if item in self.menu[category]:
+            return False
+        try:
+            price = float(price)
+        except ValueError:
+            return False
+        self.menu[category][item] = price
+        return True
+
+    def remove_item(self, category, item):
+        if category in self.menu and item in self.menu[category]:
+            del self.menu[category][item]
+            return True
         return False
 
 
@@ -97,7 +123,6 @@ class OrderModel:
 
 class UserModel:
     def __init__(self):
-        # In production, passwords would be stored securely.
         self.users = {
             "admin": {"password": "admin123", "role": "admin"},
             "cashier": {"password": "cashier123", "role": "cashier"}
