@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
-from PIL import Image, ImageTk
+from PIL import Image
 
 # ---------------- HomeView ----------------
 class HomeView(ctk.CTk):
@@ -13,20 +13,19 @@ class HomeView(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
         
-        # Load background image.
+        # Load background image and wrap as CTkImage.
         try:
             bg_image = Image.open('Images/bg.png')
-            bg_photo = ImageTk.PhotoImage(bg_image)
-            bg_label = ctk.CTkLabel(self, image=bg_photo, text="")
-            bg_label.image = bg_photo  # keep reference
-            bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+            bg_ctk = ctk.CTkImage(light_image=bg_image, dark_image=bg_image, size=(400,300))
+            bg_label = ctk.CTkLabel(self, image=bg_ctk, text="")
+            bg_label.image = bg_ctk  # keep reference
+            bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
         except Exception as e:
-            print("Background image not found or failed to load:", e)
+            print("HomeView background image error:", e)
         
         welcome_label = ctk.CTkLabel(self, text="Welcome to Coded Restaurant", font=("Helvetica Bold-Oblique", 22))
         welcome_label.pack(pady=20)
         
-        # Changed button colors to harmonize with the background and admin panel.
         order_button = ctk.CTkButton(self, text="Place Order", font=("Helvetica", 16),
                                      command=on_order, fg_color="#2980b9")
         order_button.pack(pady=10)
@@ -46,16 +45,23 @@ class OrderView(ctk.CTkToplevel):
         self.on_back = on_back
         self.order_summary = {}  # Mapping (category, item) -> quantity
         
-        # Pre-load and resize plus image to 30x30 pixels.
+        # Load and wrap plus icon from "Images/plus_icon.png" (30x30).
         try:
-            plus_raw = Image.open("Images/plus.png")
-            plus_small = plus_raw.resize((30, 30), Image.ANTIALIAS)
-            self.plus_img = ImageTk.PhotoImage(plus_small)
+            plus_raw = Image.open("Images/plus_icon.png")
+            self.plus_img = ctk.CTkImage(light_image=plus_raw, dark_image=plus_raw, size=(30,30))
         except Exception as e:
-            print("Error loading plus.png:", e)
+            print("Error loading plus_icon.png:", e)
             self.plus_img = None
         
-        # Mapping for category background images.
+        # Load and wrap minus icon from "Images/minus_icon.png" (30x30).
+        try:
+            minus_raw = Image.open("Images/minus_icon.png")
+            self.minus_img = ctk.CTkImage(light_image=minus_raw, dark_image=minus_raw, size=(30,30))
+        except Exception as e:
+            print("Error loading minus_icon.png:", e)
+            self.minus_img = None
+        
+        # Mapping for category background image file paths.
         self.bg_images = {
             "Main Courses": "Images/atseke.png",
             "Drinks": "Images/grand_combi.png",
@@ -64,20 +70,18 @@ class OrderView(ctk.CTkToplevel):
             "Other": "Images/bg.png"
         }
         
-        # Configure grid: summary, tabs, and buttons arranged vertically.
+        # Configure grid: summary, tabview, and button frame.
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
         self.grid_rowconfigure(2, weight=0)
         self.grid_columnconfigure(0, weight=1)
         
-        # Enlarged order summary frame at the top.
+        # Order summary frame.
         summary_frame = ctk.CTkFrame(self)
         summary_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
         
-        # Increased height for the summary textbox.
         self.summary_textbox = ctk.CTkTextbox(summary_frame, wrap="word", font=("Helvetica", 14), height=250)
         self.summary_textbox.grid(row=0, column=0, sticky="ew")
-        
         summary_scrollbar = ctk.CTkScrollbar(summary_frame, orientation="vertical", command=self.summary_textbox.yview)
         summary_scrollbar.grid(row=0, column=1, sticky="ns")
         self.summary_textbox.configure(yscrollcommand=summary_scrollbar.set)
@@ -92,20 +96,21 @@ class OrderView(ctk.CTkToplevel):
             self.tabview.add(category)
             tab_frame = self.tabview.tab(category)
             
-            # Set background image for the tab (if available).
+            # Set category background image wrapped as CTkImage.
             if category in self.bg_images:
                 try:
                     bg_img = Image.open(self.bg_images[category])
-                    bg_photo = ImageTk.PhotoImage(bg_img)
-                    bg_label = ctk.CTkLabel(tab_frame, image=bg_photo, text="")
-                    bg_label.image = bg_photo  # Keep reference.
+                    # Use a fixed size to match the scrollable frame.
+                    bg_ctk = ctk.CTkImage(light_image=bg_img, dark_image=bg_img, size=(750,400))
+                    bg_label = ctk.CTkLabel(tab_frame, image=bg_ctk, text="")
+                    bg_label.image = bg_ctk  # keep reference
                     bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
-                    bg_label.lower()  # Ensure the background stays behind other widgets.
+                    bg_label.lower()  # Send background to back.
                 except Exception as e:
                     print(f"Error loading background for {category}:", e)
             
-            # Create a scrollable frame on top of the background.
-            scroll_frame = ctk.CTkScrollableFrame(tab_frame, width=750, height=400)
+            # Create scrollable frame on top.
+            scroll_frame = ctk.CTkScrollableFrame(tab_frame, width=750, height=400, fg_color="transparent")
             scroll_frame.pack(fill="both", expand=True)
             row = 0
             for item, price in items.items():
@@ -115,7 +120,7 @@ class OrderView(ctk.CTkToplevel):
                 label_price = ctk.CTkLabel(scroll_frame, text=f"GHS {price:.2f}", font=label_font)
                 label_price.grid(row=row, column=1, padx=5, pady=5)
                 
-                # Use the resized plus image if available.
+                # Plus button with the wrapped plus icon.
                 if self.plus_img:
                     plus_button = ctk.CTkButton(scroll_frame, image=self.plus_img, text="",
                                                 width=30, command=lambda c=category, i=item: self.add_item(c, i))
@@ -124,14 +129,19 @@ class OrderView(ctk.CTkToplevel):
                                                 command=lambda c=category, i=item: self.add_item(c, i))
                 plus_button.grid(row=row, column=2, padx=5, pady=5)
                 
-                minus_button = ctk.CTkButton(scroll_frame, text="–", width=30, font=label_font,
-                                             command=lambda c=category, i=item: self.remove_item(c, i))
+                # Minus button with the wrapped minus icon.
+                if self.minus_img:
+                    minus_button = ctk.CTkButton(scroll_frame, image=self.minus_img, text="",
+                                                 width=30, command=lambda c=category, i=item: self.remove_item(c, i))
+                else:
+                    minus_button = ctk.CTkButton(scroll_frame, text="–", width=30,
+                                                 command=lambda c=category, i=item: self.remove_item(c, i))
                 minus_button.grid(row=row, column=3, padx=5, pady=5)
                 row += 1
 
         # Bottom button frame.
         self.button_frame = ctk.CTkFrame(self)
-        self.button_frame.grid(row=2, column=0, pady=10, padx=10, sticky="ew")
+        self.button_frame.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
         self.button_frame.grid_columnconfigure((0, 1, 2), weight=1)
         
         invoice_button = ctk.CTkButton(self.button_frame, text="Generate Invoice", font=("Helvetica", 16),
@@ -196,19 +206,17 @@ class InvoiceView(ctk.CTkToplevel):
         self.create_widgets(invoice_text)
     
     def create_widgets(self, invoice_text):
-        container = ctk.CTkFrame(self)
+        container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Set invoice background image.
         try:
             bg_img = Image.open("Images/grand_combi.png")
-            bg_photo = ImageTk.PhotoImage(bg_img)
-            bg_label = ctk.CTkLabel(container, image=bg_photo, text="")
-            bg_label.image = bg_photo  # keep reference
-            bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+            bg_ctk = ctk.CTkImage(light_image=bg_img, dark_image=bg_img, size=(400,500))
+            bg_label = ctk.CTkLabel(container, image=bg_ctk, text="")
+            bg_label.image = bg_ctk
+            bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
             bg_label.lower()
         except Exception as e:
-            print("Invoice background image load error:", e)
+            print("Invoice background image error:", e)
         
         self.textbox = ctk.CTkTextbox(container, wrap="word", font=("Helvetica", 14))
         self.textbox.pack(side="top", fill="both", expand=True)
