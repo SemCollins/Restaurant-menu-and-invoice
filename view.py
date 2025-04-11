@@ -51,7 +51,7 @@ class OrderView(ctk.CTkToplevel):
         except Exception as e:
             print("Error loading minus_icon.png:", e)
             self.minus_img = None
-        # Mapping for backgrounds.
+
         self.bg_images = {
             "Main Courses": "Images/atseke.png",
             "Drinks": "Images/grand_combi.png",
@@ -77,7 +77,6 @@ class OrderView(ctk.CTkToplevel):
         for category, items in self.menu.items():
             self.tabview.add(category)
             tab_frame = self.tabview.tab(category)
-            # Container frame to hold the canvas and scrollbar.
             container = tk.Frame(tab_frame)
             container.pack(fill="both", expand=True)
             canvas = tk.Canvas(container, width=750, height=400, bd=0, highlightthickness=0)
@@ -89,7 +88,7 @@ class OrderView(ctk.CTkToplevel):
                 bg_path = self.bg_images.get(category, "Images/bg.png")
                 bg_img = Image.open(bg_path).resize((750,400), Image.LANCZOS)
                 bg_photo = ImageTk.PhotoImage(bg_img)
-                canvas.bg_photo = bg_photo  # Keep reference.
+                canvas.bg_photo = bg_photo
                 canvas.create_image(0, 0, image=bg_photo, anchor="nw")
             except Exception as e:
                 print("Error loading canvas background for", category, e)
@@ -102,16 +101,15 @@ class OrderView(ctk.CTkToplevel):
             except Exception as e:
                 print("Error loading overlay background for", category, e)
                 overlay_bg_photo = None
-            # Bind mouse wheel events for Windows and macOS
+            # Improved touchpad scrolling: scroll one unit for any nonzero delta.
             def _on_mousewheel(event, canvas=canvas):
-                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-            canvas.bind_all("<MouseWheel>", _on_mousewheel)  
-
-            # On macOS
-            canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-            canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
-
+                if event.delta:
+                    scroll_units = -1 if event.delta > 0 else 1
+                    canvas.yview_scroll(scroll_units, "units")
+            canvas.bind("<Enter>", lambda e: canvas.focus_set())
+            canvas.bind("<MouseWheel>", _on_mousewheel)
+            canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+            canvas.bind("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
             overlay = ctk.CTkFrame(inner_frame, width=730, height=380, corner_radius=15, fg_color=("white","gray10"))
             overlay.pack(padx=10, pady=10)
             if overlay_bg_photo is not None:
@@ -199,6 +197,7 @@ class OrderView(ctk.CTkToplevel):
         self.destroy()
         self.on_back()
 
+# ---------------- InvoiceView ----------------
 class InvoiceView(ctk.CTkToplevel):
     def __init__(self, invoice_text, on_back):
         super().__init__()
@@ -233,14 +232,17 @@ class InvoiceView(ctk.CTkToplevel):
         self.destroy()
         self.on_back()
 
+# ---------------- LoginView ----------------
 class LoginView(ctk.CTkToplevel):
     def __init__(self, on_login, on_back):
         super().__init__()
+        self.attributes("-topmost", True)
         self.title("Admin Login")
         self.geometry("300x250")
         self.on_login = on_login
         self.on_back = on_back
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -252,26 +254,20 @@ class LoginView(ctk.CTkToplevel):
         label_password.pack(pady=5)
         self.password_entry = ctk.CTkEntry(self, show="*", font=label_font)
         self.password_entry.pack(pady=5)
-        login_button = ctk.CTkButton(self, text="Login", font=label_font, command=self.login)
+        login_button = ctk.CTkButton(self, text="Login", font=label_font, command=lambda: (print("Login pressed"), self.on_login(self.username_entry.get(), self.password_entry.get())))
         login_button.pack(pady=5)
         back_button = ctk.CTkButton(self, text="Back", font=label_font, command=self.back)
         back_button.pack(pady=5)
-    
-    def login(self):
-        username = self.username_entry.get()
-        password = self.password_entry.get()
-        if not username or not password:
-            messagebox.showerror("Error", "Please enter both username and password.")
-            return
-        self.on_login(username, password)
     
     def back(self):
         self.destroy()
         self.on_back()
 
+# ---------------- AdminPanelView and Related Edit Views ----------------
 class AdminPanelView(ctk.CTkToplevel):
     def __init__(self, menu_model, controller, on_back):
         super().__init__()
+        self.attributes("-topmost", True)
         self.title("Admin Panel - Update Prices")
         self.geometry("800x600")
         self.menu_model = menu_model
@@ -280,6 +276,7 @@ class AdminPanelView(ctk.CTkToplevel):
         self.entries = {}
         self.create_widgets()
         self.major_edit_view = None
+        self.focus_force()
     
     def create_widgets(self):
         self.tabview = ctk.CTkTabview(self)
@@ -301,10 +298,10 @@ class AdminPanelView(ctk.CTkToplevel):
                 entry = ctk.CTkEntry(frame, width=10, font=label_font)
                 entry.grid(row=row, column=4, padx=5, pady=5)
                 self.entries[(category, item)] = entry
-                update_button = ctk.CTkButton(frame, text="Update", font=label_font, 
+                update_button = ctk.CTkButton(frame, text="Update", font=label_font,
                                               command=lambda c=category, i=item, e=entry: self.update_price(c, i, e))
                 update_button.grid(row=row, column=5, padx=5, pady=5)
-                edit_button = ctk.CTkButton(frame, text="Edit", font=label_font, 
+                edit_button = ctk.CTkButton(frame, text="Edit", font=label_font,
                                             command=lambda c=category, i=item, p=price: self.open_edit_window(c, i, p))
                 edit_button.grid(row=row, column=6, padx=5, pady=5)
                 row += 1
@@ -332,7 +329,7 @@ class AdminPanelView(ctk.CTkToplevel):
             messagebox.showerror("Error", f"Failed to update price for '{item}'.")
     
     def open_edit_window(self, category, item, current_price):
-        ProductEditView(self, category, item, current_price)
+        ProductEditView(self, category, item, current_price, self.controller)
     
     def open_major_edit_window(self):
         if self.major_edit_view is not None and self.major_edit_view.winfo_exists():
@@ -345,14 +342,17 @@ class AdminPanelView(ctk.CTkToplevel):
         self.on_back()
 
 class ProductEditView(ctk.CTkToplevel):
-    def __init__(self, parent, category, item, current_price):
+    def __init__(self, parent, category, item, current_price, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title(f"Edit Product: {item}")
         self.geometry("400x300")
         self.category = category
-        self.item = item
+        self.item = item  # old item name
         self.current_price = current_price
+        self.controller = controller
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -370,17 +370,31 @@ class ProductEditView(ctk.CTkToplevel):
         save_button.pack(pady=10)
     
     def save_changes(self):
-        new_name = self.name_entry.get()
-        new_price = self.price_entry.get()
-        messagebox.showinfo("Saved", f"Changes saved for product '{new_name}'.")
+        new_name = self.name_entry.get().strip()
+        new_price = self.price_entry.get().strip()
+        if not new_name or not new_price:
+            messagebox.showerror("Error", "Product name and price cannot be empty.")
+            return
+        try:
+            new_price_float = float(new_price)
+        except ValueError:
+            messagebox.showerror("Error", "Invalid price. Please enter a valid number.")
+            return
+        updated = self.controller.menu_model.update_product(self.category, self.item, new_name, new_price_float)
+        if updated:
+            messagebox.showinfo("Success", f"Product '{new_name}' updated successfully.")
+        else:
+            messagebox.showerror("Error", "Update failed. Check that the product exists and try again.")
         self.destroy()
 
 class MajorEditView(ctk.CTkToplevel):
     def __init__(self, parent, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title("Major Edit Options")
         self.geometry("400x400")
-        self.grab_set()
+        # Uncomment the following line if you want modal behavior.
+        # self.grab_set()
         self.controller = controller
         self.parent = parent
         self.create_widgets()
@@ -388,6 +402,7 @@ class MajorEditView(ctk.CTkToplevel):
         self.add_item_view = None
         self.remove_item_view = None
         self.invoice_format_view = None
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -403,36 +418,42 @@ class MajorEditView(ctk.CTkToplevel):
         edit_invoice_button.pack(pady=5)
     
     def add_category(self):
+        print("Add Category button pressed")
         if self.add_category_view is not None and self.add_category_view.winfo_exists():
             self.add_category_view.lift()
             return
-        self.add_category_view = AddCategoryView(self)
+        self.add_category_view = AddCategoryView(self, self.controller)
     
     def add_item(self):
+        print("Add Item button pressed")
         if self.add_item_view is not None and self.add_item_view.winfo_exists():
             self.add_item_view.lift()
             return
-        self.add_item_view = AddItemView(self)
+        self.add_item_view = AddItemView(self, self.controller)
     
     def remove_item(self):
+        print("Remove Item button pressed")
         if self.remove_item_view is not None and self.remove_item_view.winfo_exists():
             self.remove_item_view.lift()
             return
-        self.remove_item_view = RemoveItemView(self)
+        self.remove_item_view = RemoveItemView(self, self.controller)
     
     def edit_invoice(self):
+        print("Edit Invoice Format button pressed")
         if self.invoice_format_view is not None and self.invoice_format_view.winfo_exists():
             self.invoice_format_view.lift()
             return
         self.invoice_format_view = InvoiceFormatEditView(self, self.controller)
 
 class AddCategoryView(ctk.CTkToplevel):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title("Add New Category")
         self.geometry("300x200")
-        self.parent = parent
+        self.controller = controller
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -448,7 +469,8 @@ class AddCategoryView(ctk.CTkToplevel):
         if not category:
             messagebox.showerror("Error", "Please enter a category name.")
             return
-        success = self.master.controller.menu_model.add_category(category)
+        success = self.controller.menu_model.add_category(category)
+        print("Attempting to add category:", category, "Success:", success)
         if success:
             messagebox.showinfo("Success", f"Category '{category}' added.")
             self.destroy()
@@ -456,13 +478,15 @@ class AddCategoryView(ctk.CTkToplevel):
             messagebox.showerror("Error", f"Category '{category}' already exists.")
 
 class AddItemView(ctk.CTkToplevel):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title("Add New Item")
         self.geometry("300x300")
-        self.parent = parent
-        self.menu_model = self.master.controller.menu_model
+        self.controller = controller
+        self.menu_model = controller.menu_model
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -490,6 +514,7 @@ class AddItemView(ctk.CTkToplevel):
             messagebox.showerror("Error", "Please enter both item name and price.")
             return
         success = self.menu_model.add_item(category, item, price)
+        print("Attempting to add item:", item, "in category:", category, "Success:", success)
         if success:
             messagebox.showinfo("Success", f"Item '{item}' added to category '{category}'.")
             self.destroy()
@@ -497,13 +522,15 @@ class AddItemView(ctk.CTkToplevel):
             messagebox.showerror("Error", "Failed to add item. It may already exist or price is invalid.")
 
 class RemoveItemView(ctk.CTkToplevel):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title("Remove Item")
         self.geometry("300x300")
-        self.parent = parent
-        self.menu_model = self.master.controller.menu_model
+        self.controller = controller
+        self.menu_model = controller.menu_model
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -539,6 +566,7 @@ class RemoveItemView(ctk.CTkToplevel):
             messagebox.showerror("Error", "No item selected.")
             return
         success = self.menu_model.remove_item(category, item)
+        print("Attempting to remove item:", item, "from category:", category, "Success:", success)
         if success:
             messagebox.showinfo("Success", f"Item '{item}' removed from category '{category}'.")
             self.destroy()
@@ -548,10 +576,12 @@ class RemoveItemView(ctk.CTkToplevel):
 class InvoiceFormatEditView(ctk.CTkToplevel):
     def __init__(self, parent, controller):
         super().__init__(parent)
+        self.attributes("-topmost", True)
         self.title("Edit Invoice Format")
         self.geometry("500x400")
         self.controller = controller
         self.create_widgets()
+        self.focus_force()
     
     def create_widgets(self):
         label_font = ("Helvetica", 14)
@@ -571,33 +601,3 @@ class InvoiceFormatEditView(ctk.CTkToplevel):
             self.destroy()
         else:
             messagebox.showerror("Error", "Template cannot be empty.")
-
-if __name__ == "__main__":
-    # Use actual controller and menu data in production.
-    # The following dummy implementations are for demonstration purposes only.
-    class DummyMenu:
-        def __init__(self):
-            self.menu = {
-                "Main Courses": {"Steak": 50, "Salmon": 45},
-                "Drinks": {"Coke": 5, "Water": 2},
-                "Appetizers": {"Wings": 10, "Nachos": 8},
-                "Desserts": {"Cake": 7, "Ice Cream": 6},
-                "Other": {"Napkins": 1}
-            }
-        def get_menu(self):
-            return self.menu
-        def add_category(self, cat): return True
-        def add_item(self, cat, item, price): return True
-        def remove_item(self, cat, item): return True
-        def update_price(self, cat, item, price): return True
-
-    class DummyController:
-        def __init__(self):
-            self.menu_model = DummyMenu()
-            self.invoice_template = "Invoice Template"
-        def on_generate_invoice(self, details, view): pass
-        def on_back(self): pass
-
-    root = HomeView(lambda: OrderView(DummyMenu().get_menu(), DummyController().on_generate_invoice, DummyController().on_back),
-                    lambda: print("Admin Login"))
-    root.mainloop()
